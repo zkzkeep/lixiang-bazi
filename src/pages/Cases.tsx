@@ -10,7 +10,7 @@ export default function Cases() {
   const [msg, setMsg] = useState('')
   const fileRef = useRef<HTMLInputElement>(null)
 
-  const open = (c: CaseItem) => { store.setCurrent({ input: c.input, caseId: c.id }); nav('/chart') }
+  const open = (c: CaseItem) => { store.setCurrent({ input: c.input, caseId: c.id, override: c.override, events: c.events }); nav('/chart') }
   const del = (c: CaseItem) => {
     if (!confirm(`删除「${c.input.name || '未命名'}」？此操作不可恢复。`)) return
     store.deleteCase(c.id)

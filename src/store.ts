@@ -1,11 +1,16 @@
 // 本地存储：所有数据只存在用户自己的浏览器里，不上传任何服务器
 import type { BirthInput } from './core/chart.ts'
+import type { Override, VerifiedEvent } from './core/duan.ts'
 
 export interface CaseItem {
   id: string
   input: BirthInput
   /** 先断后验笔记 */
   note: string
+  /** 经过验证的人工喜忌设定 */
+  override?: Override
+  /** 已验证事件 */
+  events?: VerifiedEvent[]
   createdAt: number
   updatedAt: number
 }
@@ -70,12 +75,19 @@ export const store = {
   },
 
   /** 当前正在看的盘：caseId 为空表示还没保存 */
-  getCurrent: () => read<{ input: BirthInput; caseId?: string } | null>(K.current, null),
-  setCurrent: (v: { input: BirthInput; caseId?: string }) => write(K.current, v),
+  getCurrent: () => read<Current | null>(K.current, null),
+  setCurrent: (v: Current) => write(K.current, v),
 
   /** 先断后验模式：开启后理法/象法分析默认遮住 */
   getBlind: () => read<boolean>(K.blind, false),
   setBlind: (v: boolean) => write(K.blind, v),
+}
+
+export interface Current {
+  input: BirthInput
+  caseId?: string
+  override?: Override
+  events?: VerifiedEvent[]
 }
 
 export const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6)

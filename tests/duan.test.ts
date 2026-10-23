@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { buildChart, type BirthInput } from '../src/core/chart.ts'
-import { duanChart, duanDaYun, duanLiuNian, duanToText } from '../src/core/duan.ts'
+import { checkEvents, duanChart, duanDaYun, duanLiuNian, duanToText, resolve, type Override, type VerifiedEvent } from '../src/core/duan.ts'
 import { analyzeStrength } from '../src/core/lifa.ts'
 
 const base: BirthInput = { name: '', gender: 1, calendar: 'solar', year: 1985, month: 3, day: 6, hour: 10, minute: 0, useTrueSolar: false, lng: 120, sect: 1 }
@@ -64,4 +64,57 @@ test('月令无六合时不做合绊修正；格局与扶抑一致时如实说�
   const zl = duanChart(c).zonglun.map((l) => l.text).join('\n')
   assert.match(zl, /格局与扶抑一致/)
   assert.ok(!zl.includes('得令却偏弱'))
+})
+
+test('人工设定：燥湿土分开取值，断盘按设定推演并附模型原判对照', () => {
+  const c = buildChart({ ...base, year: 1954, month: 3, day: 19, hour: 8 }) // 甲午 丁卯 甲戌 戊辰
+  const ov: Override = { verdict: '身强', bingYao: '病在火与燥土，药为金水', level: { 木: '忌', 火: '忌', 燥土: '忌', 湿土: '平', 金: '用', 水: '喜' } }
+  const { xj } = resolve(c, ov)
+  assert.equal(xj.mode, '人工')
+  assert.equal(xj.char('戌'), '忌')
+  assert.equal(xj.char('辰'), '平')
+  assert.equal(xj.char('庚'), '用')
+  assert.equal(xj.group['官杀'], '用')
+  const d = duanChart(c, ov)
+  assert.match(d.headline, /日主身强，以金为用神（按你的设定）/)
+  const zl = d.zonglun.map((l) => l.text).join('\n')
+  assert.match(zl, /喜忌（你的设定）.*燥土为忌神.*湿土为闲神/)
+  assert.match(zl, /模型原判：日主偏弱/)
+  assert.match(zl, /你判定为身强（模型按计数为偏弱/)
+  assert.ok(!zl.includes('得令却偏弱'), '已人工指定旺衰时不再提示模型的矛盾')
+  assert.match(zl, /格局与扶抑一致/) // 身强 + 金为用，阳刃格用官杀
+  // 同一步运，设定与模型结论可以不同
+  const dy = c.daYun.find((x) => x.gan === '辛' || x.gan === '庚')!
+  assert.notEqual(duanDaYun(c, dy, ov).label, duanDaYun(c, dy).label)
+})
+
+test('应期规则：流年合日主、子女星透干、天干合化', () => {
+  const c = buildChart(base) // 乙丑 己卯 甲辰 己巳，男命，甲日卯月
+  const years = c.daYun.flatMap((dy) => dy.liuNian.map((n) => ({ dy, n })))
+  const pick = (g: string, a: number, b: number) => years.find(({ n }) => n.ganZhi[0] === g && n.age >= a && n.age <= b)!
+  const ji = pick('己', 20, 50)
+  assert.ok(duanLiuNian(c, ji.dy, ji.n.year, ji.n.ganZhi).lines.some((l) => l.text.includes('合日主甲')))
+  const geng = pick('庚', 20, 50)
+  assert.ok(duanLiuNian(c, geng.dy, geng.n.year, geng.n.ganZhi).lines.some((l) => l.text.includes('子女星（七杀）透干')))
+  // 甲午 丁卯 甲戌 戊辰：壬年与月干丁相合，卯月木旺，合而化木
+  const c2 = buildChart({ ...base, year: 1954, month: 3, day: 19, hour: 8 })
+  const ren = c2.daYun.flatMap((dy) => dy.liuNian.map((n) => ({ dy, n }))).find(({ n }) => n.ganZhi[0] === '壬')!
+  assert.ok(duanLiuNian(c2, ren.dy, ren.n.year, ren.n.ganZhi).lines.some((l) => l.text.includes('合而化木')))
+})
+
+test('已验证事件：分别给出模型与设定的吻合度，起运前的年份不评', () => {
+  const c = buildChart(base)
+  const dy = c.daYun[2]
+  const n = dy.liuNian[0]
+  const ev: VerifiedEvent[] = [
+    { id: 'a', year: n.year, tone: '吉', text: '测试事件' },
+    { id: 'b', year: c.daYun[0].startYear - 1, tone: '凶', text: '起运前' },
+  ]
+  const ov: Override = { level: { 木: '用', 火: '喜', 燥土: '喜', 湿土: '喜', 金: '忌', 水: '喜' } }
+  const r = checkEvents(c, ev, ov)
+  assert.equal(r[0].dayun, '起运前')
+  assert.equal(r[0].fitModel, '—')
+  assert.equal(r[1].ganZhi, n.ganZhi)
+  assert.ok(['✓', '△', '✗'].includes(r[1].fitModel))
+  assert.ok(r[1].mine && ['✓', '△', '✗'].includes(r[1].fitMine!))
 })

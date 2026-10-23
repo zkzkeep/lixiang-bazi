@@ -30,7 +30,9 @@ export default function Home() {
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
     const input = { ...f, month: f.calendar === 'lunar' && leap ? -Math.abs(f.month) : Math.abs(f.month) }
-    store.setCurrent({ input })
+    const prev = store.getCurrent()
+    // 生辰没变（只是回来看看）就保留已有的命例、设定与事件
+    store.setCurrent(prev && JSON.stringify(prev.input) === JSON.stringify(input) ? prev : { input })
     nav('/chart')
   }
 

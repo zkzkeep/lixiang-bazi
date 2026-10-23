@@ -247,3 +247,16 @@ th { color: var(--muted); font-weight: normal; font-size: 13px; }
 .ln-row .gz { font-weight: 600; }
 .ln-row .muted { flex: 1; }
 .ln-item.now .ln-row { color: var(--accent); font-weight: 600; }
+
+/* 人工设定 / 对照 */
+.pills { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.pill.ghost { background: transparent; border: 1px solid currentColor; }
+.pill.ghost.good { color: var(--ok); }
+.pill.ghost.bad { color: var(--bad); }
+.pill.ghost.mid { color: var(--muted); }
+.xj-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 10px 0; }
+.xj-grid select { width: 100%; }
+.field input { min-width: 0; }
+.field.wide { width: 100%; }
+.field.wide input { width: 100%; }
+td.left { text-align: left; }

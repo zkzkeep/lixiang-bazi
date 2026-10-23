@@ -8,7 +8,8 @@ import { chartNodes } from '../core/nodes.ts'
 import { GAN_XIANG, ZHI_XIANG, comboXiang, gongWeiXiang, riZhuXiang, shenSha } from '../core/xiangfa.ts'
 import { Wu } from '../components/Wu.tsx'
 import DuanTab from './DuanTab.tsx'
-import { explainLingConflict, judgeXiJi, reconcileGeJu } from '../core/duan.ts'
+import { explainLingConflict, judgeXiJi, reconcileGeJu, type Override, type VerifiedEvent } from '../core/duan.ts'
+import { EventsEditor, OverrideEditor } from './SettingPanel.tsx'
 import { newId, store } from '../store.ts'
 
 type Tab = 'base' | 'duan' | 'li' | 'xiang' | 'yun' | 'note'
@@ -22,6 +23,12 @@ export default function ChartView() {
   const [blind, setBlind] = useState(store.getBlind())
   const [revealed, setRevealed] = useState(false)
   const [saved, setSaved] = useState('')
+  const caseOf = () => (cur?.caseId ? store.getCases().find((c) => c.id === cur.caseId) : undefined)
+  const [ov, setOvState] = useState<Override | undefined>(() => cur?.override ?? caseOf()?.override)
+  const [events, setEventsState] = useState<VerifiedEvent[]>(() => cur?.events ?? caseOf()?.events ?? [])
+  // 设定与事件一改就写回“当前盘”，刷新页面也不丢；正式保存仍走“保存到命例”
+  const setOv = (v?: Override) => { setOvState(v); if (cur) store.setCurrent({ ...cur, caseId, override: v, events }) }
+  const setEvents = (v: VerifiedEvent[]) => { setEventsState(v); if (cur) store.setCurrent({ ...cur, caseId, override: ov, events: v }) }
 
   const chart = useMemo(() => (cur ? safeBuild(cur.input) : null), [cur])
   if (!cur) return <Navigate to="/" replace />
@@ -30,8 +37,8 @@ export default function ChartView() {
   const save = () => {
     const id = caseId ?? newId()
     const old = store.getCases().find((c) => c.id === id)
-    store.saveCase({ id, input: cur.input, note, createdAt: old?.createdAt ?? Date.now(), updatedAt: Date.now() })
-    store.setCurrent({ input: cur.input, caseId: id })
+    store.saveCase({ id, input: cur.input, note, override: ov, events, createdAt: old?.createdAt ?? Date.now(), updatedAt: Date.now() })
+    store.setCurrent({ input: cur.input, caseId: id, override: ov, events })
     setCaseId(id)
     setSaved('已保存到「我的命例」')
     setTimeout(() => setSaved(''), 2000)
@@ -58,7 +65,7 @@ export default function ChartView() {
       ) : (
         <>
           {tab === 'base' && <BaseTab chart={chart} />}
-          {tab === 'duan' && <DuanTab chart={chart} />}
+          {tab === 'duan' && <DuanTab chart={chart} ov={ov} onEdit={() => setTab('note')} />}
           {tab === 'li' && <LiTab chart={chart} />}
           {tab === 'xiang' && <XiangTab chart={chart} />}
           {tab === 'yun' && <YunTab chart={chart} />}
@@ -66,6 +73,9 @@ export default function ChartView() {
       )}
 
       {tab === 'note' && (
+        <>
+        <OverrideEditor chart={chart} ov={ov} onChange={setOv} />
+        <EventsEditor chart={chart} ov={ov} events={events} onChange={setEvents} />
         <div className="card">
           <label className="check">
             <input type="checkbox" checked={blind} onChange={(e) => { setBlind(e.target.checked); store.setBlind(e.target.checked) }} />
@@ -80,6 +90,7 @@ export default function ChartView() {
             {blind && !revealed && <button onClick={() => { setRevealed(true); setTab('li') }}>写好了，揭晓分析</button>}
           </div>
         </div>
+        </>
       )}
       {tab !== 'note' && (
         <div className="row end">
