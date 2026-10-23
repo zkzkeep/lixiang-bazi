@@ -153,6 +153,7 @@ th { color: var(--muted); font-weight: normal; font-size: 13px; }
 .steps li { margin: 6px 0; }
 .steps li.yes::marker { color: var(--ok); }
 .steps li.no::marker { color: var(--bad); }
+.steps li.adj::marker { color: var(--wx-jin); }
 .meter { margin: 12px 0; }
 .meter-bar { position: relative; height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; }
 .meter-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent), var(--wx-tu)); }

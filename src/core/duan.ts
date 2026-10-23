@@ -7,7 +7,7 @@ import {
   type Gan, type ShiShen, type ShiShenGroup, type WuXing, type Zhi,
 } from './constants.ts'
 import { PILLAR_KEYS, makePillar, type Chart, type DaYun } from './chart.ts'
-import { analyzeGeJu, analyzeStrength, type Strength } from './lifa.ts'
+import { analyzeGeJu, analyzeStrength, type GeJu, type Strength } from './lifa.ts'
 import { findRelations } from './relations.ts'
 import { GAN_XIANG } from './xiangfa.ts'
 import { chartNodes } from './nodes.ts'
@@ -126,6 +126,61 @@ export interface Duan {
 
 const xjTxt = (x: XJ) => (x === '用' ? '用神' : x === '喜' ? '喜神' : x === '忌' ? '忌神' : '闲神')
 
+/** 得令与总分相反时，说清楚“为什么会这样”，并点明另一种看法 */
+export function explainLingConflict(chart: Chart, st: Strength, xj: XiJi): Line | undefined {
+  if (!st.lingConflict) return undefined
+  const mz = chart.pillars.month.zhi
+  const why: string[] = []
+  if (st.deLing.ok) {
+    const otherRoots = st.deDi.roots.filter((r) => !r.startsWith('月支'))
+    why.push(otherRoots.length ? `月令之外的根只有${otherRoots.join('、')}` : `月令${mz}之外地支无根`)
+    if (xj.weight['印星'] === 0) why.push('全盘无印生扶')
+    if (st.adjustments.length) why.push(`月令${mz}被六合绊住、提纲之力打折`)
+    const drains: ShiShenGroup[] = ['食伤', '财星', '官杀']
+    const heavy = drains.filter((g) => xj.weight[g] >= 1.5).map((g) => `${g}${xj.weight[g]}`)
+    if (heavy.length) why.push(`克泄耗成势（${heavy.join('、')}）`)
+    return {
+      text: `⚠ 得令却偏弱：日主虽当令，但${why.join('，')}，所以帮身只占 ${(st.ratio * 100).toFixed(0)}%。这类盘最考功夫——也有人会抓住“得令有刃”断为身旺、改取泄耗为用，建议对照理法页明细，在「先断后验」里写下你的判断。`,
+      basis: [st.deLing.text, st.deDi.text, ...st.adjustments],
+    }
+  }
+  if (st.deDi.roots.length) why.push(`地支有根：${st.deDi.roots.join('、')}`)
+  if (st.deShi.helpers.length) why.push(`天干有帮：${st.deShi.helpers.join('、')}`)
+  return {
+    text: `⚠ 失令却偏强：日主虽不当令，但${why.join('；') || '印比力量合计占优'}，所以帮身占 ${(st.ratio * 100).toFixed(0)}%。失令之身，根气再多也常“外强中干”，判断时宜保守，建议对照理法页明细复核。`,
+    basis: [st.deLing.text, ...st.adjustments],
+  }
+}
+
+/** 各格局按“格局法”所喜的十神大类（顺用善神、逆用恶神） */
+const GE_XI_GROUPS: Record<string, ShiShenGroup[]> = {
+  正官格: ['财星', '印星'], 七杀格: ['食伤', '印星'], 正财格: ['食伤', '官杀'], 偏财格: ['食伤', '官杀'],
+  正印格: ['官杀'], 偏印格: ['官杀'], 食神格: ['财星'], 伤官格: ['财星', '印星'],
+  建禄格: ['财星', '官杀', '食伤'], 阳刃格: ['官杀'],
+}
+
+/** 格局之喜与扶抑喜忌对照：一致时点明，冲突时给出取舍的道理 */
+export function reconcileGeJu(gj: GeJu, st: Strength, xj: XiJi): Line {
+  const groups = GE_XI_GROUPS[gj.name] ?? []
+  const lv = (g: ShiShenGroup) => xj.level[xj.gw[g]]
+  const ok = groups.filter((g) => lv(g) === '用' || lv(g) === '喜')
+  const bad = groups.filter((g) => lv(g) === '忌')
+  const fmt = (gs: ShiShenGroup[]) => gs.map((g) => `${g}（${xj.gw[g]}）`).join('、')
+  const basis = [`格局法：${gj.name}喜${fmt(groups)}`, `扶抑：日主${st.verdict}，${xj.reasons[0] ?? ''}`]
+  if (!bad.length) return { text: `格局与扶抑一致：${gj.name}所喜的${fmt(groups)}，按旺衰也为喜用，结构与力量指向同一方向，取用较为清楚。`, basis }
+  if (ok.length) return { text: `格局有几种成法（${fmt(groups)}），此盘日主${st.verdict}，取${fmt(ok)}一路；${fmt(bad)}按旺衰为忌，不宜用。`, basis }
+  if (gj.name === '阳刃格') {
+    return {
+      text: `格局与扶抑相左：阳刃格本喜官杀制刃，但前提是刃旺身强、需要约束。此盘日主${st.verdict}，月令之刃是日主最主要的帮身之根，若再以官杀（${xj.gw['官杀']}）克身，身更不胜，所以官杀反为忌神，取扶抑为先。等岁运把日主扶旺之后，官杀才转为可用的“制刃之权”。`,
+      basis,
+    }
+  }
+  return {
+    text: `格局与扶抑相左：${gj.name}按格局法喜${fmt(bad)}，但此盘日主${st.verdict}，扶抑上${fmt(bad)}为忌。格局讲结构，旺衰讲力量；力量不足时格局之喜难以承受，以扶抑为先，岁运遇之多是“有其名而难承其力”。`,
+    basis,
+  }
+}
+
 export function duanChart(chart: Chart): Duan {
   const st = analyzeStrength(chart)
   const gj = analyzeGeJu(chart)
@@ -156,12 +211,14 @@ export function duanChart(chart: Chart): Duan {
     },
     {
       text: `月令${mz}为${ssMonth}，${st.deLing.ok ? '日主得令' : '日主失令'}；${st.deDi.ok ? '地支有根' : '地支无根'}，${st.deShi.ok ? '天干有帮' : '天干无助'}，综合为${st.verdict}。`,
-      basis: [st.deLing.text, st.deDi.text, `帮身 ${st.support} / 耗身 ${st.drain}`],
+      basis: [st.deLing.text, st.deDi.text, ...st.adjustments, `帮身 ${st.support} / 耗身 ${st.drain}`],
     },
+    ...(explainLingConflict(chart, st, xj) ? [explainLingConflict(chart, st, xj)!] : []),
     {
       text: `格局：${gj.name}。喜：${gj.xi}；忌：${gj.ji}。${gj.checks.filter((c) => c.startsWith('⚠') || c.startsWith('✓')).join(' ')}`,
       basis: gj.steps,
     },
+    reconcileGeJu(gj, st, xj),
     {
       text: `喜忌：${(['木', '火', '土', '金', '水'] as WuXing[]).map((w) => `${w}为${xjTxt(xj.level[w])}`).join('，')}。`,
       basis: xj.reasons,
@@ -238,7 +295,7 @@ export function duanChart(chart: Chart): Duan {
       食神格: '宜技艺、餐饮、教育、文创等以才艺服务的方向',
       伤官格: '宜技术、创意、传媒、自由职业，不宜受过多约束',
       建禄格: '多白手起家，靠自己打拼，宜专业技术或自主经营',
-      阳刃格: '个性刚猛，宜有挑战、需魄力的行业，喜官杀约束成就权威',
+      阳刃格: isXi('官杀') ? '个性刚猛，宜有挑战、需魄力的行业，得官杀约束可成权威' : '个性刚强、凡事靠自己，此盘官杀为忌，宜凭专业实力立身，不宜过早硬扛重压',
     }
     lines.push({ text: `${gj.name}：${GE_JOB[gj.name] ?? '以格局喜忌定方向'}。`, basis: [gj.source] })
     if (!guan.length && !sha.length) lines.push({ text: '原局官杀不现，不喜受人管束，更适合专业技术或自主发展；职位升迁多看岁运引出官杀之时。', basis: ['四柱无正官七杀'] })

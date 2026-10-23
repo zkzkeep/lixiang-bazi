@@ -8,6 +8,7 @@ import { chartNodes } from '../core/nodes.ts'
 import { GAN_XIANG, ZHI_XIANG, comboXiang, gongWeiXiang, riZhuXiang, shenSha } from '../core/xiangfa.ts'
 import { Wu } from '../components/Wu.tsx'
 import DuanTab from './DuanTab.tsx'
+import { explainLingConflict, judgeXiJi, reconcileGeJu } from '../core/duan.ts'
 import { newId, store } from '../store.ts'
 
 type Tab = 'base' | 'duan' | 'li' | 'xiang' | 'yun' | 'note'
@@ -236,6 +237,9 @@ function LiTab({ chart }: { chart: Chart }) {
   const st = analyzeStrength(chart)
   const gj = analyzeGeJu(chart)
   const ys = analyzeYongShen(chart, st)
+  const xj = judgeXiJi(chart, st)
+  const conflict = explainLingConflict(chart, st, xj)
+  const recon = reconcileGeJu(gj, st, xj)
   const { gans, zhis } = chartNodes(chart)
   const rels = findRelations(gans, zhis)
   const [showItems, setShowItems] = useState(false)
@@ -254,6 +258,7 @@ function LiTab({ chart }: { chart: Chart }) {
           <li className={st.deLing.ok ? 'yes' : 'no'}><b>得令</b>：{st.deLing.text}</li>
           <li className={st.deDi.ok ? 'yes' : 'no'}><b>得地</b>：{st.deDi.text}</li>
           <li className={st.deShi.ok ? 'yes' : 'no'}><b>得势</b>：{st.deShi.text}</li>
+          {st.adjustments.map((a, i) => <li key={i} className="adj"><b>修正</b>：{a}</li>)}
         </ol>
         <div className="meter">
           <div className="meter-bar"><i style={{ width: `${st.ratio * 100}%` }} /><em style={{ left: '50%' }} /></div>
@@ -263,16 +268,18 @@ function LiTab({ chart }: { chart: Chart }) {
         {showItems && (
           <div className="table-wrap">
             <table className="compact">
-              <thead><tr><th>位置</th><th>字</th><th>十神</th><th>权重</th><th>作用</th></tr></thead>
+              <thead><tr><th>位置</th><th>字</th><th>十神</th><th>权重</th><th>作用</th><th>修正</th></tr></thead>
               <tbody>
                 {st.items.map((it, i) => (
-                  <tr key={i}><td>{it.pos}</td><td><Wu c={it.char} /></td><td>{it.shiShen}</td><td>{it.weight}</td><td className={it.value > 0 ? 'pos' : 'neg'}>{it.value > 0 ? '帮' : '耗'}</td></tr>
+                  <tr key={i}><td>{it.pos}</td><td><Wu c={it.char} /></td><td>{it.shiShen}</td><td>{it.weight}</td><td className={it.value > 0 ? 'pos' : 'neg'}>{it.value > 0 ? '帮' : '耗'}</td><td className="muted">{it.note ?? ''}</td></tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-        <ul className="warn">{st.warnings.map((w, i) => <li key={i}>{w}</li>)}</ul>
+        {conflict && <p className="tip">{conflict.text}</p>}
+        {/* 已有详细解释时，不再重复那条泛泛的“得令与总分不一致”提醒 */}
+        <ul className="warn">{st.warnings.filter((w) => !(conflict && w.startsWith('得令与总分'))).map((w, i) => <li key={i}>{w}</li>)}</ul>
       </div>
 
       <div className="card">
@@ -283,6 +290,7 @@ function LiTab({ chart }: { chart: Chart }) {
           <span>忌</span><b>{gj.ji}</b>
         </div>
         <ul className="list">{gj.checks.map((c, i) => <li key={i}>{c}</li>)}</ul>
+        <p className="tip">{recon.text}</p>
       </div>
 
       <div className="card">

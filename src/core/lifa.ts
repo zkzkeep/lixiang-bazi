@@ -5,6 +5,7 @@ import {
   wangXiang, woKe, woSheng, type Gan, type ShiShen, type WuXing,
 } from './constants.ts'
 import { PILLAR_KEYS, type Chart, type PillarKey } from './chart.ts'
+import { liuHe } from './relations.ts'
 
 export interface ScoreItem {
   pos: string
@@ -13,6 +14,8 @@ export interface ScoreItem {
   weight: number
   /** 正数=帮身（印比），负数=耗身（食财官） */
   value: number
+  /** 权重修正说明，如“卯戌合绊 ×0.7” */
+  note?: string
 }
 
 export interface Strength {
@@ -24,6 +27,10 @@ export interface Strength {
   drain: number
   ratio: number
   verdict: '身强' | '偏强' | '中和' | '偏弱' | '身弱'
+  /** 对静态计数做过的修正（目前只有月令合绊） */
+  adjustments: string[]
+  /** 得令与总分结论相反 */
+  lingConflict: boolean
   warnings: string[]
 }
 
@@ -33,6 +40,9 @@ const POS_ZHI: Record<PillarKey, string> = { year: '年支', month: '月支', da
 const ZHI_POS_W: Record<PillarKey, number> = { year: 1, month: 3, day: 1.5, time: 1 }
 
 const isSupport = (s: ShiShen) => SS_GROUP[s] === '印星' || SS_GROUP[s] === '比劫'
+
+/** 合绊系数：两支相合，彼此牵绊，各自发挥的力量打七折 */
+const HE_BAN = 0.7
 
 export function analyzeStrength(chart: Chart): Strength {
   const dg = chart.dayGan
@@ -77,7 +87,20 @@ export function analyzeStrength(chart: Chart): Strength {
     text: helpers.length ? `天干有帮扶：${helpers.join('、')}。` : '天干无印比帮扶，日主孤立。',
   }
 
-  // 量化：天干每字 1 分，地支按藏干权重 × 位置权重
+  // 月令合绊：月支与紧邻的年支或日支六合，双方互相牵绊，力量各减三成
+  const adjustments: string[] = []
+  const banned = new Map<PillarKey, string>()
+  for (const k of ['year', 'day'] as PillarKey[]) {
+    const z = chart.pillars[k].zhi
+    const he = liuHe(monthZhi, z)
+    if (!he) continue
+    const tag = `${monthZhi}${z}合绊 ×${HE_BAN}`
+    banned.set('month', tag)
+    banned.set(k, tag)
+    adjustments.push(`月令${monthZhi}与${POS_ZHI[k]}${z}紧贴六合（合${he}），两支被合绊，各自力量按 ×${HE_BAN} 计。月令是提纲，被合住后得令的分量要打折扣。`)
+  }
+
+  // 量化：天干每字 1 分，地支按藏干权重 × 位置权重（× 合绊系数）
   const items: ScoreItem[] = []
   for (const k of PILLAR_KEYS) {
     if (k !== 'day') {
@@ -87,10 +110,11 @@ export function analyzeStrength(chart: Chart): Strength {
     }
     const z = chart.pillars[k].zhi
     const ws = cangWeights(z)
+    const ban = banned.get(k)
     CANG_GAN[z].forEach((g, i) => {
       const s = shiShen(dg, g)
-      const w = +(ws[i] * ZHI_POS_W[k]).toFixed(2)
-      items.push({ pos: `${POS_ZHI[k]}${z}·${g}`, char: g, shiShen: s, weight: w, value: isSupport(s) ? w : -w })
+      const w = +(ws[i] * ZHI_POS_W[k] * (ban ? HE_BAN : 1)).toFixed(2)
+      items.push({ pos: `${POS_ZHI[k]}${z}·${g}`, char: g, shiShen: s, weight: w, value: isSupport(s) ? w : -w, note: ban })
     })
   }
   const support = +items.filter((i) => i.value > 0).reduce((a, b) => a + b.value, 0).toFixed(2)
@@ -98,12 +122,13 @@ export function analyzeStrength(chart: Chart): Strength {
   const ratio = support / (support + drain)
   const verdict = ratio >= 0.62 ? '身强' : ratio >= 0.52 ? '偏强' : ratio > 0.45 ? '中和' : ratio > 0.35 ? '偏弱' : '身弱'
 
-  const warnings: string[] = ['本模型只做“静态计数”，没有计算合化、冲克、刑害对力量的增减，也不分天干远近、地支是否透干——这些正是需要你人工修正的地方。']
+  const warnings: string[] = ['本模型以“静态计数”为主，只修正了月令被六合绊住的情况；其他合化、冲克、刑害对力量的增减，以及天干远近、地支是否透干都没有计算——这些正是需要你人工修正的地方。']
   if (ratio > 0.85) warnings.push('帮身力量极大，需考虑“专旺/从强”类特殊格局，不能简单按身强抑之。')
   if (ratio < 0.15) warnings.push('日主几乎无助，需考虑“从格”（从财、从杀、从儿），若日主无根且克泄极重，可能反以顺势为用。')
-  if (lingOk !== ratio >= 0.5) warnings.push(`得令与总分结论不一致（${lingOk ? '得令却总分偏弱' : '失令却总分偏强'}），这类盘最考功夫，建议重点复核。`)
+  const lingConflict = lingOk !== ratio >= 0.5
+  if (lingConflict) warnings.push(`得令与总分结论不一致（${lingOk ? '得令却总分偏弱' : '失令却总分偏强'}），这类盘最考功夫，建议重点复核。`)
 
-  return { deLing, deDi, deShi, items, support, drain, ratio, verdict, warnings }
+  return { deLing, deDi, deShi, items, support, drain, ratio, verdict, adjustments, lingConflict, warnings }
 }
 
 // ---------------- 格局 ----------------

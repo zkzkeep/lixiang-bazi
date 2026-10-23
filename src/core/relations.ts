@@ -21,6 +21,9 @@ const GAN_HE: Record<string, string> = {
   [pairKey('甲', '己')]: '土', [pairKey('乙', '庚')]: '金', [pairKey('丙', '辛')]: '水',
   [pairKey('丁', '壬')]: '木', [pairKey('戊', '癸')]: '火',
 }
+/** 两支是否六合；是则返回合化五行的说明 */
+export const liuHe = (a: string, b: string): string | undefined => ZHI_HE[pairKey(a, b)]
+
 const GAN_CHONG = new Set([pairKey('甲', '庚'), pairKey('乙', '辛'), pairKey('丙', '壬'), pairKey('丁', '癸')])
 
 const ZHI_HE: Record<string, string> = {
