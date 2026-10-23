@@ -1,0 +1,10 @@
+{
+  "name": "理象八字",
+  "short_name": "理象八字",
+  "description": "免费开源的八字排盘与理法、象法学习工具",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f7f1e6",
+  "theme_color": "#7a2e1d",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}
