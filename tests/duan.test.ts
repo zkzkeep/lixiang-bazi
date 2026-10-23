@@ -118,3 +118,52 @@ test('已验证事件：分别给出模型与设定的吻合度，起运前的�
   assert.ok(['✓', '△', '✗'].includes(r[1].fitModel))
   assert.ok(r[1].mine && ['✓', '△', '✗'].includes(r[1].fitMine!))
 })
+
+// 己丑 丁丑 丁丑 辛丑（女）：官杀只藏于丑中气；年干己、丑月土旺，甲来则甲己化土
+const kid = { ...base, gender: 0 as const, year: 2010, month: 1, day: 27, hour: 2 }
+
+test('年幼命主：事业改看学业，婚姻、子女注明远期参考，不说“利于事业与职位”', () => {
+  const c = buildChart(kid)
+  const d = duanChart(c, undefined, 2015) // 虚岁 6
+  const guan = d.sections.find((s) => s.key === 'guan')!
+  assert.equal(guan.title, '学业与将来事业')
+  assert.ok(guan.lines.some((l) => l.text.startsWith('学业：')))
+  const all = d.sections.map((s) => s.summary + s.lines.map((l) => l.text).join('')).join('')
+  assert.ok(!all.includes('利于事业与职位'))
+  assert.ok(!all.includes('求财有利'))
+  assert.ok(!all.includes('生育'))
+  for (const k of ['cai', 'hun', 'zi']) assert.match(d.sections.find((s) => s.key === k)!.lines[0].text, /命主现年 6 岁.*只作远期参考/)
+  // 成年后再看，恢复为事业官运
+  assert.equal(duanChart(c, undefined, 2040).sections.find((s) => s.key === 'guan')!.title, '事业官运')
+})
+
+test('官杀、配偶星只藏于中气余气时，按“不显”论，不再说满', () => {
+  const d = duanChart(buildChart(kid), undefined, 2040)
+  const guan = d.sections.find((s) => s.key === 'guan')!
+  assert.equal(guan.summary, '官杀不显，看岁运引出')
+  assert.ok(guan.lines.some((l) => /官杀只藏于.*中气.*力量很弱/.test(l.text)))
+  assert.ok(!guan.lines.some((l) => l.text.includes('官杀生印')))
+  const hun = d.sections.find((s) => s.key === 'hun')!
+  assert.ok(hun.lines.some((l) => /夫星（官杀）只藏于.*不算显现/.test(l.text)))
+  assert.ok(!hun.lines.some((l) => l.text.includes('配偶对自己有助力')))
+})
+
+test('合化时天干断语按化神论，不再与“被化去”自相矛盾', () => {
+  const c = buildChart(kid)
+  const hit = c.daYun.flatMap((dy) => dy.liuNian.map((n) => ({ dy, n }))).find(({ n }) => n.ganZhi[0] === '甲')!
+  const lines = duanLiuNian(c, hit.dy, hit.n.year, hit.n.ganZhi).lines.map((l) => l.text)
+  const g = lines.find((t) => t.startsWith('天干甲'))!
+  assert.match(g, /天干甲本为正印，但与原局年干己相合.*合而化土.*作用被化去，按土论/)
+  assert.ok(!lines.some((t) => t.startsWith('天干甲为正印')), '不应再单独给出未化前的断语')
+  // 丑月化土按湿土查：设成“燥土忌、湿土喜”，化神应判为喜神
+  const ov: Override = { level: { 木: '平', 火: '平', 燥土: '忌', 湿土: '喜', 金: '平', 水: '平' } }
+  assert.match(duanLiuNian(c, hit.dy, hit.n.year, hit.n.ganZhi, ov).lines.find((l) => l.text.startsWith('天干甲'))!.text, /合而化土（[^，]+，喜神）/)
+})
+
+test('童年大运里宫位措辞不出现“工作环境”“恋爱婚姻”', () => {
+  const c = buildChart(kid)
+  for (const dy of c.daYun.filter((x) => x.startAge + 4 < 16)) {
+    const t = duanDaYun(c, dy).lines.map((l) => l.text).join('')
+    assert.ok(!t.includes('工作环境') && !t.includes('恋爱'), t)
+  }
+})

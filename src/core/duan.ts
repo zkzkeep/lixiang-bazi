@@ -244,8 +244,12 @@ export function reconcileGeJu(gj: GeJu, st: Strength, xj: XiJi): Line {
   }
 }
 
-export function duanChart(chart: Chart, ov?: Override): Duan {
+export function duanChart(chart: Chart, ov?: Override, refYear = new Date().getFullYear()): Duan {
   const { st, xj, st0, base } = resolve(chart, ov)
+  // 命主现在的虚岁：年幼时事业、婚姻、子女只作远期参考，改看学业
+  const nowAge = refYear - Number(chart.usedTime.slice(0, 4)) + 1
+  const young = nowAge < 16
+  const youngNote = (what: string): Line => ({ text: `命主现年 ${nowAge} 岁，${what}是成年以后的事，以下只作远期参考。`, basis: [`按 ${refYear} 年计算虚岁`] })
   const gj = analyzeGeJu(chart)
   const male = chart.input.gender === 1
   const sp = spots(chart)
@@ -261,6 +265,8 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
   const lv = (g: ShiShenGroup) => xj.group[g]
   const isXi = (g: ShiShenGroup) => lv(g) === '用' || lv(g) === '喜'
   const relAt = (label: string) => rels.filter((r) => r.members.includes(label))
+  const weakOnly = (l: Spot[]) => l.length > 0 && l.every((x) => !x.gan && x.qi > 0)
+  const weakTxt = (l: Spot[]) => `只藏于${names(l)}（${l.map((x) => (x.qi === 1 ? '中气' : '余气')).join('、')}），力量很弱`
 
   const ssMonth = shiShen(dg, CANG_GAN[mz][0])
   const headline = `${male ? '乾造' : '坤造'}，${dg}${chart.dayWx}日主，生于${mz}月（${seasonOf(mz)}季），${gj.name}，日主${st.verdict}${xj.mode === '从弱' || xj.mode === '从强' ? `，近${xj.mode === '从弱' ? '从格' : '专旺'}` : ''}，以${xj.yong}为用神${ov ? '（按你的设定）' : ''}。`
@@ -348,14 +354,29 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
     const KU: Record<WuXing, Zhi> = { 木: '未', 火: '戌', 金: '丑', 水: '辰', 土: '辰' }
     const ku = KU[xj.gw['财星']]
     if (PILLAR_KEYS.some((k) => chart.pillars[k].zhi === ku)) lines.push({ text: `原局见财库${ku}，有储蓄、置产之象，财库逢冲（岁运）常为开库得财或破财之期。`, basis: [`${xj.gw['财星']}之库在${ku}`] })
-    sections.push(mk('cai', '财富', lines, score, score > 0.5 ? '财为喜用，求财有利' : score < -0.5 ? '财为忌神，宜守不宜攻' : '财运中平，看岁运'))
+    if (young) lines.unshift(youngNote('求财理财'))
+    sections.push(young
+      ? mk('cai', '财富', lines, 0, '远期参考')
+      : mk('cai', '财富', lines, score, score > 0.5 ? '财为喜用，求财有利' : score < -0.5 ? '财为忌神，宜守不宜攻' : '财运中平，看岁运'))
   }
 
   // ---- 事业官运 ----
   {
     const lines: Line[] = []
     const guan = of('正官'), sha = of('七杀')
-    let score = isXi('官杀') ? 1 : lv('官杀') === '忌' ? -1 : 0
+    const gsWeak = weakOnly([...guan, ...sha])
+    let score = gsWeak ? 0 : isXi('官杀') ? 1 : lv('官杀') === '忌' ? -1 : 0
+    if (young) {
+      // 童年看学业：食伤（才智兴趣）、印（学习受教）、官杀（规矩考试）、比劫（自主好胜）
+      if (isXi('食伤') && xj.weight['食伤'] >= 1) lines.push({ text: '学业：食伤为喜，聪明，表达和动手能力强，宜因材施教、发展兴趣特长。', basis: [`食伤力量 ${xj.weight['食伤']}，为${xjTxt(lv('食伤'))}`] })
+      if (isXi('印星') && xj.weight['印星'] >= 0.5) lines.push({ text: '学业：印星为喜，爱学习、能静下心，得长辈和老师教导之益。', basis: [`印星力量 ${xj.weight['印星']}`] })
+      if (lv('印星') === '忌' && xj.weight['印星'] >= 1) lines.push({ text: '学业：印星为忌，说教和管束不宜过多，给自主空间反而学得好。', basis: [`印星力量 ${xj.weight['印星']}，为忌神`] })
+      if (!gsWeak && (guan.length || sha.length)) lines.push(isXi('官杀')
+        ? { text: '学业：官杀为喜，守规矩、能扛压力，考试运较好。', basis: [`官杀力量 ${xj.weight['官杀']}`] }
+        : { text: '学业：官杀为忌，学习压力不宜过大，严管容易逆反。', basis: [`官杀力量 ${xj.weight['官杀']}`] })
+      if (xj.weight['比劫'] >= 3) lines.push({ text: '学业：比劫旺，自主好胜，宜多引导合作，少拿来和别人比。', basis: [`比劫力量 ${xj.weight['比劫']}`] })
+      lines.push(youngNote('工作和事业'))
+    }
     const GE_JOB: Record<string, string> = {
       正官格: '宜体制内、管理、公职等讲规则、重名誉的岗位',
       七杀格: '宜竞争性强、有权责的岗位，如管理、技术攻坚、军警法务',
@@ -370,14 +391,17 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
     }
     lines.push({ text: `${gj.name}：${GE_JOB[gj.name] ?? '以格局喜忌定方向'}。`, basis: [gj.source] })
     if (!guan.length && !sha.length) lines.push({ text: '原局官杀不现，不喜受人管束，更适合专业技术或自主发展；职位升迁多看岁运引出官杀之时。', basis: ['四柱无正官七杀'] })
+    else if (gsWeak) lines.push({ text: `官杀${weakTxt([...guan, ...sha])}，原局不以官杀论事业；职位、名誉多看岁运引出官杀之时。`, basis: [`官杀力量 ${xj.weight['官杀']}`] })
     else lines.push({ text: `官杀（${xj.gw['官杀']}）为${xjTxt(lv('官杀'))}，${isXi('官杀') ? '有利于担当职责、获得职位与认可' : '压力与约束较多，需以印化或食神制之方能转为权柄'}。`, basis: [`官杀分布：${names([...guan, ...sha])}`, `官杀力量 ${xj.weight['官杀']}`] })
     if (tou('伤官').length && tou('正官').length) { lines.push({ text: '伤官见官：与上级、制度易有摩擦，言行需留余地；更适合专业型、技术型发展。', basis: [`${names(tou('伤官'))} 与 ${names(tou('正官'))}`] }); score -= 0.5 }
     if (tou('正官').length && tou('七杀').length) lines.push({ text: '官杀混杂：机会与方向多而易摇摆，宜专注一条主线。', basis: [names(tou('正官', '七杀'))] })
     if (of('七杀').length && of('食神').length && tou('食神', '七杀').length) { lines.push({ text: '食神制杀：能以才干化解压力，有掌权、做技术权威之象。', basis: [names(of('食神', '七杀'))] }); score += 0.5 }
-    if (of('七杀', '正官').length && of('正印', '偏印').length && tou('正印', '偏印', '七杀', '正官').length) { lines.push({ text: '官杀生印：宜在大平台、体制中借势上升，学历与资质对事业帮助大。', basis: [names(of('正印', '偏印'))] }); score += 0.3 }
+    if (!gsWeak && of('七杀', '正官').length && of('正印', '偏印').length && tou('正印', '偏印', '七杀', '正官').length) { lines.push({ text: '官杀生印：宜在大平台、体制中借势上升，学历与资质对事业帮助大。', basis: [names(of('正印', '偏印'))] }); score += 0.3 }
     const mrel = relAt('月支').filter((r) => r.tone === 'chong')
     if (mrel.length) lines.push({ text: '月令逢冲：工作环境、单位易有变动，职业道路多转折。', basis: mrel.map((r) => r.name) })
-    sections.push(mk('guan', '事业官运', lines, score, score > 0.5 ? '官杀为喜，利于事业与职位' : score < -0.5 ? '压力偏大，宜走专业路线' : '事业中平，重在方向选择'))
+    sections.push(young
+      ? mk('guan', '学业与将来事业', lines, 0, '年幼重在学业与兴趣，事业为远期参考')
+      : mk('guan', '事业官运', lines, score, gsWeak ? '官杀不显，看岁运引出' : score > 0.5 ? '官杀为喜，利于事业与职位' : score < -0.5 ? '压力偏大，宜走专业路线' : '事业中平，重在方向选择'))
   }
 
   // ---- 婚姻感情 ----
@@ -389,9 +413,12 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
     const dz = chart.pillars.day.zhi
     const dzSS = shiShen(dg, CANG_GAN[dz][0])
     const dzLv = xj.char(dz)
-    let score = (isXi(starG) ? 0.5 : lv(starG) === '忌' ? -0.5 : 0) + (dzLv === '用' || dzLv === '喜' ? 0.5 : dzLv === '忌' ? -0.5 : 0)
+    const starWeak = weakOnly(star)
+    let score = (starWeak ? 0 : isXi(starG) ? 0.5 : lv(starG) === '忌' ? -0.5 : 0) + (dzLv === '用' || dzLv === '喜' ? 0.5 : dzLv === '忌' ? -0.5 : 0)
     const starName = male ? '妻星（财）' : '夫星（官杀）'
-    if (!star.length) lines.push({ text: `${starName}不现，感情来得较晚或缘分需岁运引动，配偶条件不宜要求过细。`, basis: [`四柱无${starSS.join('、')}`] })
+    if (young) lines.push(youngNote('婚姻感情'))
+    if (starWeak) lines.push({ text: `${starName}${weakTxt(star)}，不算显现；感情缘分多要等岁运引出${starName.slice(0, 2)}之时，来得可能偏晚。`, basis: [`${starName}力量 ${xj.weight[starG]}`] })
+    else if (!star.length) lines.push({ text: `${starName}不现，感情来得较晚或缘分需岁运引动，配偶条件不宜要求过细。`, basis: [`四柱无${starSS.join('、')}`] })
     else if (star.length >= 4) lines.push({ text: `${starName}多现，异性缘较好，但选择多易犹豫，感情经历可能较丰富。`, basis: [`${starName}：${names(star)}`] })
     else lines.push({ text: `${starName}为${xjTxt(lv(starG))}，${isXi(starG) ? '配偶对自己有助力' : lv(starG) === '忌' ? '婚姻中压力或付出较多，需多沟通' : '配偶缘中平'}。`, basis: [`${starName}：${names(star)}`] })
     lines.push({ text: `配偶宫（日支${dz}）为${dzSS}，${keyOfChar(dz)}为${xjTxt(dzLv)}：${dzLv === '用' || dzLv === '喜' ? '婚后生活较能给自己支持，家庭是助力' : dzLv === '忌' ? '婚姻中磨合较多，宜包容、留空间' : '婚姻平稳，重在经营'}。`, basis: [`日支${dz}本气${CANG_GAN[dz][0]}为${dzSS}`] })
@@ -403,7 +430,7 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
     const dr = relAt('日支')
     dr.filter((r) => r.tone === 'chong').forEach((r) => { lines.push({ text: `日支逢冲（${r.name}）：婚姻多变动、聚少离多或观念差异大，宜晚婚、多沟通。`, basis: [r.note] }); score -= 0.5 })
     dr.filter((r) => r.type === '地支六合').forEach((r) => lines.push({ text: `日支逢合（${r.name}）：感情投入深、恋家，也可能牵绊较多。`, basis: [r.members.join('·')] }))
-    sections.push(mk('hun', '婚姻感情', lines, score, score > 0.5 ? '婚姻助力较大' : score < -0.5 ? '感情磨合较多，宜经营' : '婚姻中平'))
+    sections.push(mk('hun', '婚姻感情', lines, young ? 0 : score, young ? '远期参考' : score > 0.5 ? '婚姻助力较大' : score < -0.5 ? '感情磨合较多，宜经营' : '婚姻中平'))
   }
 
   // ---- 子女 ----
@@ -415,12 +442,13 @@ export function duanChart(chart: Chart, ov?: Override): Duan {
     const tz = chart.pillars.time.zhi
     const tLv = xj.char(tz)
     let score = (isXi(childG) ? 0.5 : lv(childG) === '忌' ? -0.3 : 0) + (tLv === '用' || tLv === '喜' ? 0.5 : tLv === '忌' ? -0.3 : 0)
+    if (young) lines.push(youngNote('子女'))
     lines.push({ text: `子女星（${male ? '官杀' : '食伤'}）${child.length ? `见于${names(child)}，为${xjTxt(lv(childG))}` : '不现'}；时柱为子女宫，时支${tz}（${keyOfChar(tz)}）为${xjTxt(tLv)}。`, basis: [`${male ? '男命以官杀为子女' : '女命以食伤为子女'}`] })
     lines.push({ text: score > 0.5 ? '子女缘较好，子女有出息、能为晚年助力。' : score < -0.3 ? '子女缘需用心经营，教养上多花心思，子女独立性较强。' : '子女缘中平，重在陪伴与教育。', basis: ['综合子女星与时柱喜忌'] })
-    if (!male && tou('偏印').length && of('食神').length) { lines.push({ text: '偏印克食神，生育与子女事宜要多加用心。', basis: [names(of('偏印', '食神'))] }); score -= 0.3 }
+    if (!male && tou('偏印').length && of('食神').length) { lines.push({ text: '偏印克食神，将来在子女方面要多用心。', basis: [names(of('偏印', '食神'))] }); score -= 0.3 }
     if (male && xj.weight['食伤'] >= 3 && child.length) lines.push({ text: '食伤旺克官杀，与子女观念易有代沟，宜放手而非管控。', basis: [`食伤力量 ${xj.weight['食伤']}`] })
     relAt('时支').filter((r) => r.tone === 'chong').forEach((r) => { lines.push({ text: `时支逢冲（${r.name}）：与子女聚少离多，或子女早离家发展。`, basis: [r.note] }); score -= 0.3 })
-    sections.push(mk('zi', '子女', lines, score, score > 0.5 ? '子女缘佳' : score < -0.3 ? '子女事宜需用心' : '子女缘中平'))
+    sections.push(mk('zi', '子女', lines, young ? 0 : score, young ? '远期参考' : score > 0.5 ? '子女缘佳' : score < -0.3 ? '子女事宜需用心' : '子女缘中平'))
   }
 
   // ---- 六亲 ----
@@ -503,8 +531,6 @@ const LOVE: Partial<Record<ShiShenGroup, { male?: [string, string]; female?: [st
 const GAN_HE5: Record<string, WuXing> = Object.fromEntries(
   ([['甲己', '土'], ['乙庚', '金'], ['丙辛', '水'], ['丁壬', '木'], ['戊癸', '火']] as const).map(([p, w]) => [[...p].sort().join(''), w]),
 )
-/** 化神取一个代表字来查喜忌（土取湿土己，因五合化土多为湿土之象） */
-const HUA_REP: Record<WuXing, string> = { 木: '甲', 火: '丙', 土: '己', 金: '庚', 水: '壬' }
 const heRiZhu = (gan: Gan, dg: Gan) => gan !== dg && !!GAN_HE5[[gan, dg].sort().join('')]
 
 /** 一步运或一个流年里，某个干支对原局的作用 */
@@ -525,33 +551,46 @@ function evalGanZhi(chart: Chart, xj: XiJi, gan: Gan, zhi: Zhi, label: string, e
     if (love && age >= 18 && age < 60) txt += '，' + (good ? love[0] : love[1])
     return txt
   }
-  lines.push({ text: `天干${gan}为${gSS}（${GAN_WX[gan]}，${xjTxt(gL)}）：${t(g1, gL)}。`, basis: [`${gSS}属${g1}`] })
-  lines.push({ text: `地支${zhi}为${zSS}（${keyOfChar(zhi)}，${xjTxt(zL)}）：${t(g2, zL)}。`, basis: [`${zhi}本气${CANG_GAN[zhi][0]}`] })
-
-  // 天干五合：与原局年、月、时干相合（日干另论）。月令之气与化神相同则合而化，否则只论合绊
+  // 天干五合：与原局年、月、时干相合（日干另论）。月令之气与化神相同则合而化，否则只论合绊。
+  // 先判合化，再写天干断语：化了就按化神论，不能一边说“利升迁”一边说“被化去”
   const mz = chart.pillars.month.zhi
+  let ganLine: Line = { text: `天干${gan}为${gSS}（${GAN_WX[gan]}，${xjTxt(gL)}）：${t(g1, gL)}。`, basis: [`${gSS}属${g1}`] }
   for (const k of ['year', 'month', 'time'] as const) {
     const og = chart.pillars[k].gan
     const hua = GAN_HE5[[gan, og].sort().join('')]
     if (!hua) continue
     const pos = `原局${chart.pillars[k].label.slice(0, 1)}干${og}`
     if (ZHI_WX[mz] === hua) {
-      const hL = xj.char(HUA_REP[hua])
+      // 化神得月令之气，就按月令这个字查喜忌（戌月化土是燥土，丑辰月化土是湿土）
+      const hL = xj.char(mz)
+      const hG = SS_GROUP[shiShen(dg, CANG_GAN[mz][0])]
       score += 0.4 * (XJ_SCORE[hL] - XJ_SCORE[gL])
-      lines.push({ text: `${gan}与${pos}相合，生于${mz}月${hua}旺，合而化${hua}（${xjTxt(hL)}）：${gan}原本的作用被化去，转为${hua}的作用。`, basis: [`${gan}${og}合化${hua}，月令${mz}属${hua}，化神得令`] })
+      ganLine = {
+        text: `天干${gan}本为${gSS}，但与${pos}相合，生于${mz}月${hua}旺，合而化${hua}（${hG}，${xjTxt(hL)}）：${gSS}的作用被化去，按${hua}论——${t(hG, hL)}。`,
+        basis: [`${gan}${og}合化${hua}，月令${mz}属${hua}，化神得令`],
+      }
     } else {
       score -= 0.2 * XJ_SCORE[gL]
-      lines.push({ text: `${gan}与${pos}相合而不化（月令不支持化${hua}），两字互相牵绊，${gan}的作用减半。`, basis: [`${gan}${og}合${hua}，月令${mz}属${ZHI_WX[mz]}`] })
+      ganLine = {
+        text: `天干${gan}为${gSS}（${GAN_WX[gan]}，${xjTxt(gL)}），但与${pos}相合而不化（月令不支持化${hua}），两字互相牵绊，作用减半：${t(g1, gL)}。`,
+        basis: [`${gan}${og}合${hua}，月令${mz}属${ZHI_WX[mz]}`],
+      }
     }
     break
   }
+  lines.push(ganLine)
+  lines.push({ text: `地支${zhi}为${zSS}（${keyOfChar(zhi)}，${xjTxt(zL)}）：${t(g2, zL)}。`, basis: [`${zhi}本气${CANG_GAN[zhi][0]}`] })
 
   // 与原局的冲合
   const self = makePillar('dayun', label, gan, zhi, dg)
   const { gans, zhis } = chartNodes(chart, [...extra, self])
   const lab = label.replace('柱', '')
   const rels = findRelations(gans, zhis).filter((r) => r.members.some((m) => m.startsWith(lab)))
-  const GONG: Record<string, string> = { 年支: '长辈、外部环境', 月支: '工作环境、父母', 日支: '婚姻感情、自身', 时支: '子女、下属、计划' }
+  const GONG: Record<string, string> = stage === 'child'
+    ? { 年支: '祖辈、外部环境', 月支: '父母、家庭环境', 日支: '自身、身心状态', 时支: '兴趣、志向' }
+    : stage === 'old'
+      ? { 年支: '长辈、外部环境', 月支: '家庭、兄弟', 日支: '配偶、自身', 时支: '子女、晚辈' }
+      : { 年支: '长辈、外部环境', 月支: '工作环境、父母', 日支: '婚姻感情、自身', 时支: '子女、下属、计划' }
   let adj = 0
   for (const r of rels) {
     const hit = r.members.find((m) => GONG[m])
@@ -563,7 +602,7 @@ function evalGanZhi(chart: Chart, xj: XiJi, gan: Gan, zhi: Zhi, label: string, e
       adj += good ? 0.3 : -0.3
       lines.push({ text: `${r.name}：冲动${hit}（${GONG[hit]}），${good ? '冲去忌神，变动中反有转机' : '该方面易有变动、奔波'}。`, basis: [r.note] })
     } else if (r.type === '地支六合' || r.type.includes('半合') || r.type.includes('三合') || r.type.includes('三会')) {
-      lines.push({ text: `${r.name}：合动${hit}（${GONG[hit]}），该方面有新的牵连、机缘${hit === '日支' ? '，常见恋爱、婚姻之机' : ''}。`, basis: [r.members.join('·')] })
+      lines.push({ text: `${r.name}：合动${hit}（${GONG[hit]}），该方面有新的牵连、机缘${hit === '日支' && age >= 18 && age < 60 ? '，常见恋爱、婚姻之机' : ''}。`, basis: [r.members.join('·')] })
     } else if (r.tone === 'xing') {
       adj -= 0.2
       lines.push({ text: `${r.name}：刑动${hit}（${GONG[hit]}），需防摩擦、是非与反复。`, basis: [r.note] })
