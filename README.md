@@ -1,6 +1,8 @@
 # 理象八字
 
-免费、开源（MIT）的八字排盘与学习工具。主打一件事：**让用的人越用越会看盘**，而不是越用越依赖软件。
+免费、开源（MIT）的八字排盘与学习工具。
+
+**在线使用**：<https://lixiang-bazi.zkzkeep.workers.dev>（手机浏览器打开后可“添加到主屏幕”）主打一件事：**让用的人越用越会看盘**，而不是越用越依赖软件。
 
 - **断盘**：纯规则自动推演，给出总论（如“乾造，甲木日主，生于卯月，阳刃格……”）和喜忌，分性格、财富、事业官运、婚姻感情、子女、六亲、健康养生逐项断语，每步大运、每个流年都有分析；每条断语附推断依据，可一键复制全文
 - **理法**：干支关系 → 旺衰（得令/得地/得势 + 公开的量化模型）→ 格局（子平取格 + 成败自检）→ 用神（扶抑 + 调候）
@@ -16,8 +18,12 @@
 pnpm install
 pnpm dev        # 本地开发 http://localhost:5173
 pnpm test       # 核心引擎单元测试（Node 原生 test runner）
-pnpm build      # 产物在 dist/，纯静态，可部署到 Cloudflare Pages / GitHub Pages / NAS
+pnpm build      # 产物在 dist/，纯静态，可部署到 Cloudflare / GitHub Pages / NAS
 ```
+
+## 部署
+
+线上版本由 Cloudflare Workers Builds 连接本仓库自动部署：推送到 `main` 即构建（`pnpm run build`）并按 `wrangler.jsonc` 上传 `dist/` 静态资源。
 
 ## 目录
 
