@@ -3,13 +3,15 @@ import { Link, Navigate } from 'react-router-dom'
 import { buildChart, countWuXing, makePillar, PILLAR_KEYS, type Chart, type Pillar } from '../core/chart.ts'
 import { CANG_GAN, GAN_WX, WUXING, WX_COLOR, explainShiShen, shiShen, type Gan, type Zhi } from '../core/constants.ts'
 import { analyzeGeJu, analyzeStrength, analyzeYongShen } from '../core/lifa.ts'
-import { findRelations, type Node, type Relation } from '../core/relations.ts'
+import { findRelations, type Relation } from '../core/relations.ts'
+import { chartNodes } from '../core/nodes.ts'
 import { GAN_XIANG, ZHI_XIANG, comboXiang, gongWeiXiang, riZhuXiang, shenSha } from '../core/xiangfa.ts'
 import { Wu } from '../components/Wu.tsx'
+import DuanTab from './DuanTab.tsx'
 import { newId, store } from '../store.ts'
 
-type Tab = 'base' | 'li' | 'xiang' | 'yun' | 'note'
-const TABS: [Tab, string][] = [['base', '基本盘'], ['li', '理法'], ['xiang', '象法'], ['yun', '岁运'], ['note', '先断后验']]
+type Tab = 'base' | 'duan' | 'li' | 'xiang' | 'yun' | 'note'
+const TABS: [Tab, string][] = [['base', '基本盘'], ['duan', '断盘'], ['li', '理法'], ['xiang', '象法'], ['yun', '岁运'], ['note', '先断后验']]
 
 export default function ChartView() {
   const [cur] = useState(() => store.getCurrent())
@@ -34,7 +36,7 @@ export default function ChartView() {
     setTimeout(() => setSaved(''), 2000)
   }
 
-  const covered = blind && !revealed && (tab === 'li' || tab === 'xiang')
+  const covered = blind && !revealed && (tab === 'duan' || tab === 'li' || tab === 'xiang')
 
   return (
     <div className="page">
@@ -46,7 +48,7 @@ export default function ChartView() {
       {covered ? (
         <div className="card cover">
           <h3>先断，后验</h3>
-          <p>你开启了“先断后验”模式。建议先到「先断后验」页写下你对旺衰、格局、用神和主要象意的判断，再揭开自动分析对照。</p>
+          <p>你开启了“先断后验”模式。建议先到「先断后验」页写下你对旺衰、格局、用神和各方面的判断，再揭开断盘与理法、象法分析对照。</p>
           <div className="row">
             <button className="primary" onClick={() => setTab('note')}>去写判断</button>
             <button onClick={() => setRevealed(true)}>直接揭晓</button>
@@ -55,6 +57,7 @@ export default function ChartView() {
       ) : (
         <>
           {tab === 'base' && <BaseTab chart={chart} />}
+          {tab === 'duan' && <DuanTab chart={chart} />}
           {tab === 'li' && <LiTab chart={chart} />}
           {tab === 'xiang' && <XiangTab chart={chart} />}
           {tab === 'yun' && <YunTab chart={chart} />}
@@ -214,14 +217,6 @@ function BaseTab({ chart }: { chart: Chart }) {
 }
 
 // ---------------- 理法 ----------------
-
-export function chartNodes(chart: Chart, extra: Pillar[] = []): { gans: Node[]; zhis: Node[] } {
-  const ps = [...PILLAR_KEYS.map((k) => chart.pillars[k]), ...extra]
-  return {
-    gans: ps.map((p) => ({ label: p.label.replace('柱', '') + '干', char: p.gan })),
-    zhis: ps.map((p) => ({ label: p.label.replace('柱', '') + '支', char: p.zhi })),
-  }
-}
 
 function RelationList({ rels, empty }: { rels: Relation[]; empty: string }) {
   if (!rels.length) return <p className="muted">{empty}</p>

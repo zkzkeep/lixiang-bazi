@@ -127,7 +127,7 @@ const GE_RULES: Record<string, { xi: string; ji: string }> = {
   食神格: { xi: '食神生财，或食神制杀', ji: '枭神夺食、身弱食重' },
   伤官格: { xi: '伤官生财，或伤官配印（身弱）', ji: '伤官见官' },
   建禄格: { xi: '禄劫不入格，另取透出之财官食伤为用', ji: '再见比劫、无财官可用' },
-  月刃格: { xi: '阳刃喜官杀制之（刃杀相停）', ji: '无制而刃旺、再逢冲刃' },
+  阳刃格: { xi: '官杀制刃（刃杀相停）', ji: '无制而刃旺、再逢冲刃' },
 }
 
 export function analyzeGeJu(chart: Chart): GeJu {
@@ -155,7 +155,7 @@ export function analyzeGeJu(chart: Chart): GeJu {
   const ss = shiShen(dg, pick)
   let name: string
   if (ss === '比肩') name = '建禄格'
-  else if (ss === '劫财') name = isYangGan(dg) ? '月刃格' : '建禄格'
+  else if (ss === '劫财') name = isYangGan(dg) ? '阳刃格' : '建禄格'
   else name = `${ss === '七杀' ? '七杀' : ss}格`
   steps.push(`${pick}对日主${dg}为${ss}，${ss === '比肩' || ss === '劫财' ? '月令为日主之禄/刃，比劫不能为格，称' + name : '故为' + name}。`)
 
