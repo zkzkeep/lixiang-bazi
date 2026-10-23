@@ -1,0 +1,11 @@
+// Cloudflare Workers 部署配置：纯静态站点，直接上传 vite 构建出的 dist/
+// 有了这份配置，`wrangler deploy` 不会再尝试自动安装插件、改写 package.json
+{
+  "$schema": "https://unpkg.com/wrangler@4.152.0/config-schema.json",
+  "name": "lixiang-bazi",
+  "compatibility_date": "2026-10-19",
+  "assets": {
+    "directory": "./dist",
+    "not_found_handling": "single-page-application"
+  }
+}
